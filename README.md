@@ -10,3 +10,14 @@ javascript:$("body").append('<script src="https://cdn.rawgit.com/islamic-state/q
 ```
 
 Note: in some browsers such as chrome ```javascript:``` would get deleted so type that part manually.
+
+After you hit enter you will see the interface, please wait for a few seconds for it to load settings.
+
+#### Blocking people
+Click "Block List" to get list of trolls to block. Then click "Block All!" to block them.
+
+#### Mass Tweeting
+coming soon...
+
+#### Mass Following
+coming soon...
