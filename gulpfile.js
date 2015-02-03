@@ -11,7 +11,7 @@ gulp.task('jade', function() {
 });
 
 gulp.task('merge', ['jade'], function() {
-	return gulp.src(['./node_modules/async/lib/async.js', './lib/templates.js'])
+	return gulp.src(['./node_modules/async/lib/async.js','./node_modules/BankersBox/bankersbox.js', './lib/templates.js', './src/control.js'])
 	.pipe(concat('qamar.js'))
 	.pipe(gulp.dest('./dist'))
 });

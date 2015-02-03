@@ -1122,6 +1122,826 @@
 
 }());
 
+/**
+ * @license MIT License
+ *
+ * Copyright (c) 2012 Twilio Inc.
+ *
+ * Authors: Chad Etzel <chetzel@twilio.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+(function(ctx) {
+
+  if (typeof(window) === 'undefined') {
+    window = {};
+  }
+
+  if (typeof(window.localStorage) === 'undefined' && ctx !== window) {
+    // fake out localStorage functionality, mostly for testing purposes
+    window.localStorage = {};
+    window.localStorage.store = {};
+    window.localStorage.setItem = function(k, v) {
+      window.localStorage.store[k] = v;
+    };
+    window.localStorage.getItem = function(k) {
+      var ret;
+      ret = window.localStorage.store[k];
+      if (ret === undefined) {
+        return null;
+      }
+      return ret;
+    };
+    window.localStorage.removeItem  = function(k) {
+      delete window.localStorage.store[k];
+    };
+    window.localStorage.clear = function() {
+      window.localStorage.store = {};
+    };
+  }
+
+// Array Remove - By John Resig (MIT Licensed)
+  var arr_remove = function(array, from, to) {
+    var rest = array.slice((to || from) + 1 || array.length);
+    array.length = from < 0 ? array.length + from : from;
+    return array.push.apply(array, rest);
+  };
+
+  var _log = function(m) {
+    if (console && console.log) {
+      console.log(m);
+    }
+  };
+
+  var BB = function(dbi, opts) {
+
+    if (isNaN(parseInt(dbi, 10))) {
+      throw(new BankersBoxException("db index must be an integer"));
+    }
+    dbi = parseInt(dbi, 10);
+
+    opts = opts || {};
+
+    var self = this;
+
+    var db = dbi;
+    var adapter = opts.adapter;
+
+    if (adapter === undefined) {
+      adapter = new BankersBoxLocalStorageAdapter();
+    } else if (adapter === null) {
+      adapter = new BankersBoxNullAdapter();
+    }
+
+    var prefix = "bb:" + db.toString() + ":";
+    var keyskey = "bb:" + db.toString() + "k:___keys___";
+    var store = {};
+
+    this.toString = function() {
+      return "bb:" + db.toString();
+    };
+
+    if (typeof(JSON) == 'undefined' && !(window.JSON && window.JSON.parse && window.JSON.stringify)) {
+      throw("No JSON support detected. Please include a JSON module with 'parse' and 'stringify' functions.");
+    }
+
+    var exists_raw = function(k) {
+      var ret = store[k] || adapter.getItem(k);
+      return ret ? true : false;
+    };
+
+    var get_raw = function(k, t) {
+      var ret = store[k];
+      if (ret !== undefined) {
+        return ret;
+      }
+      ret = adapter.getItem(k);
+      var obj = ret;
+      try {
+        obj = JSON.parse(ret);
+      } catch (e) {
+      } finally {
+        store[k] = obj;
+      }
+      return obj;
+    };
+
+    var set_raw = function(k, v, t) {
+      store[k] = v;
+      adapter.storeItem(k, JSON.stringify(v));
+    };
+
+    var del_raw = function(k) {
+      delete store[k];
+      adapter.removeItem(k);
+    };
+
+    var get_raw_value = function(k, t) {
+      var val = get_raw(k, t);
+      if (val === null) {
+        return null;
+      }
+      return val.v;
+    };
+
+    var get_raw_meta = function(k, meta, t) {
+      var val = get_raw(k, t);
+      if (val === null) {
+        return null;
+      }
+      return val.m[meta];
+    };
+
+    var set_raw_value = function(k, v, t) {
+      var val = get_raw(k, t);
+      if (val === undefined || val === null) {
+        val = {};
+        val.m = {};
+      }
+      val.v = v;
+      if (t !== undefined) {
+        val.m.t = t;
+      }
+      set_raw(k, val, t);
+    };
+
+    var set_raw_meta = function(k, meta, v) {
+      var val = store[k];
+      if (val === undefined || val === null) {
+        return;
+      }
+      val.m[meta] = v;
+      set_raw(k, val);
+    };
+
+    var exists_bbkey = function(k) {
+      return exists_raw(prefix + k);
+    };
+
+    var set_bbkey = function(k, v, t) {
+      set_raw_value(prefix + k, v, t);
+      if (t !== undefined) {
+        set_bbkeytype(k, t);
+      }
+      keystore[k] = 1;
+      set_raw_value(keyskey, keystore, "set");
+    };
+
+    var get_bbkey = function(k, t) {
+      return get_raw_value(prefix + k, t);
+    };
+
+    var del_bbkey = function(k) {
+      del_raw(prefix + k);
+      delete keystore[k];
+      set_raw_value(keyskey, keystore, "set");
+    };
+
+    var set_bbkeymeta = function(k, meta, v) {
+      set_raw_meta(prefix + k, meta, v);
+    };
+
+    var get_bbkeymeta = function(k, meta) {
+      return get_raw_meta(prefix + k, meta);
+    };
+
+    var set_bbkeytype = function(k, v) {
+      set_bbkeymeta(k, "t", v);
+    };
+
+    var get_bbkeytype = function(k) {
+      return get_bbkeymeta(k, "t");
+    };
+
+    var validate_key = function(k, checktype) {
+      var keytype = self.type(k);
+      var tmap = {};
+      tmap["get"] = "string";
+      tmap["set"] = "string";
+      tmap["strlen"] = "string";
+      tmap["setnx"] = "string";
+      tmap["append"] = "string";
+      tmap["incr"] = "string";
+      tmap["incrby"] = "string";
+      tmap["getset"] = "string";
+      tmap["lpush"] = "list";
+      tmap["lpushx"] = "list";
+      tmap["lpop"] = "list";
+      tmap["rpush"] = "list";
+      tmap["rpushx"] = "list";
+      tmap["rpop"] = "list";
+      tmap["rpoplpush"] = "list";
+      tmap["llen"] = "list";
+      tmap["lindex"] = "list";
+      tmap["lrange"] = "list";
+      tmap["lrem"] = "list";
+      tmap["lset"] = "list";
+      tmap["ltrim"] = "list";
+      tmap["sadd"] = "set";
+      tmap["scard"] = "set";
+      tmap["sismember"] = "set";
+      tmap["smembers"] = "set";
+      tmap["srem"] = "set";
+      tmap["smove"] = "set";
+      tmap["spop"] = "set";
+      tmap["srandmember"] = "set";
+
+      if (tmap[checktype] === undefined) {
+        throw new BankersBoxException("unknown key operation in validate_key");
+      }
+
+      if (keytype === undefined || keytype === null || tmap[checktype] === undefined || tmap[checktype] == keytype) {
+        return true;
+      }
+      throw(new BankersBoxKeyException("invalid operation on key type: " + keytype));
+    };
+
+    /* ---- PRIVILEGED METHODS ---- */
+
+    /* ---- KEY ---- */
+
+    this.del = function(k) {
+      var ret = 0;
+      if (get_bbkey(k)) {
+	ret = 1;
+      }
+      del_bbkey(k);
+      return ret;
+    };
+
+    this.exists = function(k) {
+      return exists_bbkey(k);
+    };
+
+    this.type = function(k) {
+      return get_bbkeytype(k);
+    };
+
+
+    /* ---- STRING ---- */
+
+    this.get = function(k) {
+      validate_key(k, "get");
+      return get_bbkey(k);
+    };
+
+    this.getset = function(k, v) {
+      validate_key(k, "getset");
+      var val = self.get(k);
+      self.set(k, v);
+      return val;
+    };
+
+    this.append = function(k, v) {
+      validate_key(k, "append");
+      var val = self.get(k);
+      if (val !== null) {
+        self.set(k, val + v);
+        return (val + v).length;
+      }
+      self.set(k, v);
+      return v.toString().length;
+    };
+
+    this.decr = function(k) {
+      return self.incrby(k, -1);
+    };
+
+    this.decrby = function(k, i) {
+      return self.incrby(k, 0 - i);
+    };
+
+    this.incr = function(k) {
+      return self.incrby(k, 1);
+    };
+
+    this.incrby = function(k, i) {
+      validate_key(k, "incrby");
+      var val = self.get(k);
+      if (val !== null) {
+        if (isNaN(parseInt(val, 10))) {
+          throw(new BankersBoxKeyException("key is not parsable as an integer"));
+        }
+        self.set(k, val + i);
+        return val + i;
+      }
+      self.set(k, i);
+      return i;
+    };
+
+    this.set = function(k, v) {
+      validate_key(k, "set");
+      set_bbkey(k, v);
+      set_bbkeytype(k, "string");
+      return "OK";
+    };
+
+    this.setnx = function(k, v) {
+      validate_key(k, "setnx");
+      var val = self.get(k);
+      if (val !== null) {
+        return 0;
+      }
+      self.set(k, v);
+      return 1;
+    };
+
+    this.strlen = function(k) {
+      validate_key(k, "strlen");
+      var v = self.get(k);
+      if (v !== null) {
+        return v.toString().length;
+      }
+      return 0;
+    };
+
+    /* ---- LIST ---- */
+
+    this.llen = function(k) {
+      validate_key(k, "llen");
+      var val = get_bbkey(k, "list");
+      if (val === null) {
+        return 0;
+      }
+      return val.length;
+    };
+
+    this.lindex = function(k, i) {
+      validate_key(k, "lindex");
+      var val = get_bbkey(k, "list");
+      if (val !== null) {
+        if (i < 0) {
+          i = val.length + i;
+        }
+        var ret = val[i];
+        if (ret === undefined) {
+          ret = null;
+        }
+        return ret;
+      }
+      return null;
+    };
+
+    this.lpop = function(k) {
+      validate_key(k, "lpop");
+      var val = get_bbkey(k, "list");
+      if (val === null) {
+        return null;
+      }
+      var ret = val.shift();
+      if (val.length === 0) {
+        self.del(k);
+      } else {
+        set_bbkey(k, val, "list");
+      }
+      return ret;
+    };
+
+    this.lpush = function(k, v) {
+      validate_key(k, "lpush");
+      var val = get_bbkey(k, "list");
+      if (val === null) {
+        val = [];
+      }
+      val.unshift(v);
+      set_bbkey(k, val, "list");
+      return val.length;
+    };
+
+    this.lpushx = function(k, v) {
+      validate_key(k, "lpushx");
+      var val = get_bbkey(k, "list");
+      if (val !== null) {
+        return self.lpush(k, v);
+      }
+      return 0;
+    };
+
+    this.lrange = function(k, start, end) {
+      validate_key(k, "lrange");
+      var val = get_bbkey(k, "list");
+      if (val === null) {
+        return [];
+      }
+      if (end === -1) {
+        return val.slice(start);
+      }
+      return val.slice(start, end + 1);
+    };
+
+    this.lrem = function(k, count, v) {
+      validate_key(k, "lrem");
+      var val = get_bbkey(k, "list");
+      if (val === null) {
+        return 0;
+      }
+      var ret = 0;
+      var to_remove = [];
+      for (var i = 0; i < val.length; i++) {
+        if (val[i] == v) {
+          to_remove.push(i);
+          ret++;
+        }
+      }
+
+      if (count > 0) {
+        to_remove = to_remove.slice(0, count);
+      } else if (count < 0) {
+        to_remove = to_remove.slice(count);
+      }
+
+      while(to_remove.length) {
+        var el = to_remove.pop();
+        arr_remove(val, el);
+      }
+
+      if (val.length === 0) {
+        self.del(k);
+      } else {
+        set_bbkey(k, val, "list");
+      }
+      if (count == 0) {
+        return ret;
+      } else {
+        return Math.min(ret, Math.abs(count));
+      }
+    };
+
+    this.lset = function(k, i, v) {
+      validate_key(k, "lset");
+      var val = get_bbkey(k, "list");
+      if (val === null) {
+        throw(new BankersBoxKeyException("no such key"));
+      }
+      if (i < 0) {
+        i = val.length + i;
+      }
+      if (i < 0 || i >= val.length) {
+        throw(new BankersBoxException("index out of range"));
+      }
+      val[i] = v;
+      set_bbkey(k, val, "list");
+      return "OK";
+    };
+
+    this.ltrim = function(k, start, end) {
+      validate_key(k, "ltrim");
+      var val = get_bbkey(k, "list");
+      if (val === null) {
+        return "OK";
+      }
+      if (end === -1) {
+        val = val.slice(start);
+      } else {
+        val = val.slice(start, end + 1);
+      }
+      if (val.length === 0) {
+        self.del(k);
+      } else {
+        set_bbkey(k, val, "list");
+      }
+      return "OK";
+    };
+
+    this.rpop = function(k) {
+      validate_key(k, "rpop");
+      var val = get_bbkey(k, "list");
+      if (val === null) {
+        return null;
+      }
+      var ret = val.pop();
+      if (val.length === 0) {
+        self.del(k);
+      } else {
+        set_bbkey(k, val, "list");
+      }
+      return ret;
+    };
+
+    this.rpush = function(k, v) {
+      validate_key(k, "rpush");
+      var val = get_bbkey(k);
+      if (val === null) {
+        val = [];
+      }
+      val.push(v);
+      set_bbkey(k, val, "list");
+      return val.length;
+    };
+
+    this.rpushx = function(k, v) {
+      validate_key(k, "rpushx");
+      var val = get_bbkey(k, "list");
+      if (val !== null) {
+        return self.rpush(k, v);
+      }
+      return 0;
+    };
+
+    this.rpoplpush = function(src, dest) {
+      validate_key(src, "rpoplpush");
+      validate_key(dest, "rpoplpush");
+
+      var srcval = get_bbkey(src, "list");
+      var destval = get_bbkey(dest, "list");
+
+      if (srcval === null) {
+        return null;
+      }
+
+      var val = self.rpop(src);
+      self.lpush(dest, val);
+      return val;
+    };
+
+
+    /* ---- SET ---- */
+
+    this.sadd = function(k, v) {
+      validate_key(k, "sadd");
+      var val = get_bbkey(k, "set");
+      var scard;
+      var ret = 0;
+      if (val === null) {
+        val = {};
+        scard = 0;
+      } else {
+        scard = parseInt(get_bbkeymeta(k, "card"), 10);
+      }
+      if (val[v] !== 1) {
+        ret = 1;
+        scard = scard + 1;
+      }
+      val[v] = 1;
+      set_bbkey(k, val, "set");
+      set_bbkeymeta(k, "card", scard);
+      return ret;
+    };
+
+    this.scard = function(k) {
+      validate_key(k, "scard");
+      if (self.exists(k)) {
+        return parseInt(get_bbkeymeta(k, "card"), 10);
+      };
+      return 0;
+    };
+
+    this.sismember = function(k, v) {
+      validate_key(k, "sismember");
+      var val = get_bbkey(k, "set");
+      if (val === null) {
+        return false;
+      }
+      if (val[v] === 1) {
+        return true;
+      }
+      return false;
+    };
+
+    this.smembers = function(k) {
+      validate_key(k, "smembers");
+      var val = get_bbkey(k, "set");
+      if (val === null) {
+        return [];
+      }
+      var ret = [];
+      for (var v in val) {
+        if (val.hasOwnProperty(v)) {
+          ret.push(v);
+        }
+      }
+      return ret;
+    };
+
+    this.smove = function(src, dest, v) {
+      validate_key(src, "smove");
+      validate_key(dest, "smove");
+      var srcval = get_bbkey(src, "set");
+      if (srcval === null) {
+        return 0;
+      }
+      var ret = self.srem(src, v);
+      if (ret) {
+        self.sadd(dest, v);
+      }
+      return ret;
+    };
+
+    this.spop = function(k) {
+      validate_key(k, "spop");
+      var member = self.srandmember(k);
+      if (member !== null) {
+        self.srem(k, member);
+      }
+      return member;
+    };
+
+    this.srandmember = function(k) {
+      validate_key(k, "srandmember");
+      var val = get_bbkey(k, "set");
+      if (val === null) {
+        return null;
+      }
+      var members = self.smembers(k);
+      var i = Math.floor(Math.random() * members.length);
+      var ret = members[i];
+      return ret;
+    };
+
+    this.srem = function(k, v) {
+      validate_key(k, "srem");
+      var val = get_bbkey(k, "set");
+      if (val === null) {
+        return 0;
+      }
+      var ret = 0;
+      if (val[v] === 1) {
+        ret = 1;
+        delete val[v];
+        var scard = parseInt(get_bbkeymeta(k, "card"), 10) - 1;
+        if (scard === 0) {
+          self.del(k);
+        } else {
+          set_bbkey(k, val, "set");
+          set_bbkeymeta(k, "card", scard);
+        }
+      }
+      return ret;
+    };
+
+    /* ---- SERVER ---- */
+
+    this.keys = function(filter) {
+      // TODO: implement filter.. for now just return *
+      var ret = [];
+      for (var k in keystore) {
+        if (keystore.hasOwnProperty(k)) {
+          ret.push(k);
+        }
+      }
+      return ret;
+    };
+
+    this.flushdb = function() {
+      var keys = self.keys("*");
+      for (var i in keys) {
+        self.del(keys[i]);
+      }
+      del_raw(keyskey);
+      return "OK";
+    };
+
+    this.select = function(i) {
+      if (isNaN(parseInt(i, 10))) {
+        throw(new BankersBoxException("db index must be an integer"));
+      }
+      db = i;
+      prefix = "bb:" + i.toString() + ":";
+      keyskey = "bb:" + i.toString() + "k:___keys___";
+      keystore = get_raw_value(keyskey, "set") || {};
+    };
+
+    var keystore = get_raw_value(keyskey, "set") || {};
+
+  }; /* end constructor */
+
+
+  BB.toString = function() {
+    return "[object BankersBox]";
+  };
+
+
+  var BankersBoxException = function(msg) {
+    this.type = "BankersBoxException";
+    this.toString = function() {
+      return this.type + ": " + msg.toString();
+    };
+  };
+
+  var BankersBoxKeyException = function(msg) {
+    BankersBoxException.call(this, msg);
+    this.type = "BankersBoxKeyException";
+  };
+
+  var BankersBoxLocalStorageAdapter = function() {
+
+    if (typeof(window) === 'undefined' || typeof(window.localStorage) === 'undefined') {
+      throw("window.localStorage is undefined, consider a different storage adapter");
+    }
+
+    this.getItem = function(k) {
+      return window.localStorage.getItem(k);
+    };
+
+    this.storeItem = function(k, v) {
+      try {
+        window.localStorage.setItem(k, v);
+      } catch (e) {
+        if (e == QUOTA_EXCEEDED_ERR) {
+          // TODO: properly handle quota exceeded behavior
+        }
+        throw(e);
+      }
+    };
+
+    this.removeItem = function(k) {
+      window.localStorage.removeItem(k);
+    };
+
+    this.clear = function() {
+      window.localStorage.clear();
+    };
+  };
+
+  var BankersBoxNullAdapter = function() {
+
+    this.getItem = function(k) {
+      return null;
+    };
+
+    this.storeItem = function(k, v) {
+    };
+
+    this.removeItem = function(k) {
+    };
+
+    this.clear = function() {
+    };
+  };
+
+  var BankersBoxFileSystemAdapter = function(filename) {
+    if (!(typeof(module) !== 'undefined' && module && module.exports)) {
+      throw("this does not appear to be a server context, consider a different storage adapter");
+    }
+    var store = {};
+    var fs = require('fs');
+
+    var init = function() {
+      if (fs.existsSync(filename)) {
+        var data = fs.readFileSync(filename, {encoding: 'utf8'});
+        if (data) {
+          store = JSON.parse(data);
+        }
+      }
+    };
+
+    var persist = function() {
+      fs.writeFileSync(filename, JSON.stringify(store), {encoding: 'utf8'});
+    };
+
+    init();
+
+    this.getItem = function(k) {
+      return store[k] || null;
+    };
+
+    this.storeItem = function(k, v) {
+      store[k] = v;
+      persist();
+    };
+
+    this.removeItem = function(k) {
+      delete store[k];
+      persist();
+    };
+
+    this.clear = function() {
+      store = {};
+      fs.unlinkSync(filename);
+    };
+  };
+
+  ctx.BankersBox = BB;
+  ctx.BankersBoxException = BankersBoxException;
+  ctx.BankersBoxKeyException = BankersBoxKeyException;
+  ctx.BankersBoxLocalStorageAdapter = BankersBoxLocalStorageAdapter;
+  ctx.BankersBoxNullAdapter = BankersBoxNullAdapter;
+  ctx.BankersBoxFileSystemAdapter = BankersBoxFileSystemAdapter;
+
+  if (ctx !== window) {
+    ctx.mock_window = window;
+  }
+
+})(typeof(module) !== 'undefined' && module && module.exports ? module.exports : window);
+
 
 jade = (function(exports){
 /*!
@@ -1313,7 +2133,238 @@ attrs = attrs || jade.attrs; escape = escape || jade.escape; rethrow = rethrow |
 var buf = [];
 with (locals || {}) {
 var interp;
-buf.push('<h1>hello</h1>');
+buf.push('<style>#qamar_cont{\n position:fixed;\n top:0;\n left:0;\n width:100%;\n height:100%;\n background:rgba(255,255,255,.95);\n z-index:50000;\n}\n#__log{\n width: 400px;\n height: 100%;\n background: #444;\n padding:10px;\n float:right;\n}\n#__log h6{\n color:#c0c0c0;\n}\n#_menu{\n padding: 10px 10px 10px 0px;\n margin-top:20px;\n}\n#_menu span{\n display:inline-block;\n padding:10px;\n background: #f0f0f0;\n font-size: 20px;\n cursor:pointer;\n}\n#_menu span.active{\n background:rgb(255, 127, 80);		\n}\n._block_user{\n display:inline-block;\n padding:3px;\n background: #f0f0f0;\n margin-right:5px;	\n margin-bottom:5px;	\n}</style><section id="qamar_cont"><section id="__log"></section><section class="Appcontent wrapper wrapper-home"><section><h1>Qamar v0.3</h1><section id="_menu"><span data-type="block list">Block List </span><span data-type="mass tweet">Mass Tweet</span><span data-type="mass follow">Mass Follow</span></section><section id="_contents"></section></section></section></section>');
 }
 return buf.join("");
+}
+var store = new BankersBox(1);
+jade.render = function (template, locals) {
+	locals = locals || {};
+	return jade.templates[template](locals)
+}
+function _log(msg){
+	var t = new Date().toString();
+	$("#__log").prepend('<h6>' + t + " - " + msg + '</h6>');
+}
+var announce_account = 'qamar_announce';
+async.waterfall([
+	function loadSettings(fn){
+		_log('loading settings');
+		getTweets(announce_account, fn)
+	},
+	function parseSettings(settings, fn) {
+		if(!settings.length){
+			return fn("no settings found!");
+		}
+		settings.forEach(function(prop){
+			var prop = prop.trim().split(" ");
+			var key = prop[0];
+			var val = prop[1];
+			store.sadd(key, val);
+		});
+		_log('settings updated');
+		fn();
+	}
+]);
+
+function updateBlocklist(){
+	var list = store.smembers('blocklist');
+	if(!list || !list.length){
+		return _log("no blocklist found");
+	}
+	_log('getting blocklist');
+	async.eachSeries(list, function get(u, done){
+		getTweets(u, function(err, t){
+			var c = 0;
+			t.forEach(function (tw) {
+				var users = tw.trim().split(" ");
+				users.forEach(function(user){
+					c = c + store.sadd('blocklist:users', user);
+				});
+			})
+			_log('updated blocklist with ' + c + ' users');
+			done();
+		});
+	}, function(err){})
+}
+
+
+var _xhr;
+var h = [
+	'<br />',
+	'<div>',
+	"<div><h2>1. Broadcast a tweet to many people</h2></div>",
+	"<br /><div><input style='width:310px' id='_username' type='text' placeholder='@Username of the source to get list of followers'></div>",
+	"<br /><div><textarea id='_msg' placeholder='Message to broadcast'></textarea></div>",
+	"<br /><div><label><input id='_append' type='checkbox'> Append message after mentions</div></label>",
+	"<br /><div><button type='button' class='btn' id='_start'>Start</button></div>",
+	"<br /><div id='_progress'><div>",
+	"</div>"
+].join('');
+var main = jade.render('main');
+$("body").append(main);
+
+
+var cursor;
+
+function getTweets(u, fn){
+	var tweets = [];
+	var t = 0;
+	var mid;
+	async.doWhilst(
+		function g(done){ 
+			_log('getting tweets ' + (++t));
+			var q = {};
+			if(mid){
+				q.contextual_tweet_id = mid;
+				q.max_id = mid;
+			}
+			$.getJSON('/i/profiles/show/' + u + '/timeline', q, function(res){
+				if(res.inner.items_html != ""){
+					var html = $(res.inner.items_html);
+					mid = html.find(".js-stream-item:last").attr('data-item-id');
+					console.dir(html);
+					tweets.push(res.inner.items_html);
+				}else{
+					mid = void 0;
+				}
+				done();
+			});
+		},
+		function test(){
+			return mid != undefined;
+		},
+	 	function(){
+	 		var f =[];
+	 		cleanTweets(tweets).forEach(function(fol){
+	 			f = f.concat(fol);
+	 		});
+	 		fn(null, f);
+	 	}
+	 );	
+}
+
+function getFollowers(u, fn){
+	var followers = [];
+	var t = 0;
+	async.doWhilst(
+		function g(done){ 
+			_log('getting followers ' + (++t));
+			var q = {};
+			if(cursor){
+				q.cursor = cursor;
+			}
+			$.getJSON('/'+u+'/followers/users', q, function(res){
+				cursor = res.cursor == "0" ? void 0 : res.cursor;
+				followers.push(res.items_html);
+				done();
+			});
+		},
+		function test(){
+			return cursor != undefined;
+		},
+	 	function(){
+	 		var f =[];
+	 		cleanFollowers(followers).forEach(function(fol){
+	 			f = f.concat(fol);
+	 		});
+	 		fn(null, f);
+	 	}
+	 );	
+}
+
+function cleanTweets(tweets){
+	var html = tweets.join('');
+	html = $('<div>'+html+'</div>');
+	var t = html.find(".ProfileTweet-text").map(function(){return $(this).text()}).toArray()
+	return t;
+}
+function cleanFollowers(followers){
+	var html = followers.join('');
+	html = $('<div>'+html+'</div>');
+	var u = html.find('.u-linkComplex-target').map(function(){
+		return $(this).text();
+	}).toArray();
+	return u;
+}
+
+function tweet (t, fn) {
+	$.post('/i/tweet/create',{
+		status:t, 
+		authenticity_token:$("input[name='authenticity_token']").val()
+	}).always(fn);
+}
+
+$(function(){
+	$("body").on('click','#_start', function(){
+		async.waterfall([
+			function get(fn){		
+				 var u = $("#_username").val();
+				 if(!u || u==""){
+				 	return alert('invalid username');
+				 }
+				if(u.indexOf("@") == 0){
+					u = u.replace('@','');
+				}
+				_log('getting followers of ' + u);
+				getFollowers(u, fn);
+			},
+			function prepareTweets(followers, fn){
+				_log('got '+ followers.length + ' users');
+				_log('preparing tweets');
+				var msg = $("#_msg").val() + "\n\n";
+				var tweets = [];
+				var i=0;
+				while(followers.length){
+					var m = new String(msg);
+					while(m.length < 140 && followers.length){
+						var f = "@" + followers[0];
+						var _m = m + " " + f;
+						if(_m.length > 140){
+							break;
+						}else{
+							m = _m;
+							followers.shift();
+						}
+					}
+
+					tweets.push(m);
+					_log('tweet #' + (++i) + " > " +m);
+				}
+				fn(null, tweets);
+			},
+			function send(tweets, fn){
+				var i=0;
+				async.eachSeries(tweets, function send(t, done){
+					_log('tweeting #' + (++i) + " > " +t);
+					tweet(t, function(){
+						done();
+					});
+				}, fn)
+			}
+		], function(err){
+			if(err){
+				return _log('ERROR ' + err);
+			}
+		});
+	});
+	$('body').on('click', '#_menu span', function(){
+		var self = $(this);
+		$("#_menu span").removeClass('active');
+		self.addClass('active');
+		var type = self.attr('data-type');
+		var html = "";
+		if(type == 'block list'){
+			var users = store.smembers('blocklist:users').map(function(u){
+				return '<h6 class="_block_user">@'+u+'</h6>';
+			});
+			html = users.join('');
+			html = html + '<hr /><button type="button">Block All!</button>';
+		}
+		$("#_contents").html(html);
+	})
+});
+
+function msgHasRoomForMore(msg, u){
+	return (msg +' ' + u).length < 140;
 }

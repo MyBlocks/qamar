@@ -1,0 +1,57 @@
+0 info it worked if it ends with ok
+1 verbose cli [ '/usr/local/bin/node',
+1 verbose cli   '/usr/local/bin/npm',
+1 verbose cli   'install',
+1 verbose cli   '--save',
+1 verbose cli   'https://github.com/twilio/BankersBox' ]
+2 info using npm@1.4.28
+3 info using node@v0.10.36
+4 warn package.json gulp-clientjade@0.0.2 No repository field.
+5 verbose readDependencies using package.json deps
+6 verbose cache add [ 'https://github.com/twilio/BankersBox', null ]
+7 verbose cache add name=undefined spec="https://github.com/twilio/BankersBox" args=["https://github.com/twilio/BankersBox",null]
+8 verbose parsed url { protocol: 'https:',
+8 verbose parsed url   slashes: true,
+8 verbose parsed url   auth: null,
+8 verbose parsed url   host: 'github.com',
+8 verbose parsed url   port: null,
+8 verbose parsed url   hostname: 'github.com',
+8 verbose parsed url   hash: null,
+8 verbose parsed url   search: null,
+8 verbose parsed url   query: null,
+8 verbose parsed url   pathname: '/twilio/BankersBox',
+8 verbose parsed url   path: '/twilio/BankersBox',
+8 verbose parsed url   href: 'https://github.com/twilio/BankersBox' }
+9 silly lockFile 5c157504-tps-github-com-twilio-BankersBox https://github.com/twilio/BankersBox
+10 verbose lock https://github.com/twilio/BankersBox /home/demon/.npm/5c157504-tps-github-com-twilio-BankersBox.lock
+11 verbose addRemoteTarball [ 'https://github.com/twilio/BankersBox', null ]
+12 info retry fetch attempt 1 at 20:20:08
+13 verbose fetch to= /tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox
+14 http GET https://github.com/twilio/BankersBox
+15 http 200 https://github.com/twilio/BankersBox
+16 verbose tar unpack /tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox
+17 silly lockFile 56f3c8ef-hub-com-twilio-BankersBox-unpack tar:///tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox-unpack
+18 verbose lock tar:///tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox-unpack /home/demon/.npm/56f3c8ef-hub-com-twilio-BankersBox-unpack.lock
+19 silly lockFile 4593b739-P4U-github-com-twilio-BankersBox tar:///tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox
+20 verbose lock tar:///tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox /home/demon/.npm/4593b739-P4U-github-com-twilio-BankersBox.lock
+21 silly gunzTarPerm modes [ '755', '644' ]
+22 error not a package /tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox
+23 silly lockFile 56f3c8ef-hub-com-twilio-BankersBox-unpack tar:///tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox-unpack
+24 silly lockFile 56f3c8ef-hub-com-twilio-BankersBox-unpack tar:///tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox-unpack
+25 silly lockFile 4593b739-P4U-github-com-twilio-BankersBox tar:///tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox
+26 silly lockFile 4593b739-P4U-github-com-twilio-BankersBox tar:///tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox
+27 silly lockFile 5c157504-tps-github-com-twilio-BankersBox https://github.com/twilio/BankersBox
+28 silly lockFile 5c157504-tps-github-com-twilio-BankersBox https://github.com/twilio/BankersBox
+29 error Error: ENOENT, open '/tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox-unpack/package.json'
+30 error If you need help, you may report this *entire* log,
+30 error including the npm and node versions, at:
+30 error     <http://github.com/npm/npm/issues>
+31 error System Linux 3.8.0-19-generic
+32 error command "/usr/local/bin/node" "/usr/local/bin/npm" "install" "--save" "https://github.com/twilio/BankersBox"
+33 error cwd /home/demon/qamar
+34 error node -v v0.10.36
+35 error npm -v 1.4.28
+36 error path /tmp/npm-16276-lDSsLP4U/github.com/twilio/BankersBox-unpack/package.json
+37 error code ENOENT
+38 error errno 34
+39 verbose exit [ 34, true ]

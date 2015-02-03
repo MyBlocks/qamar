@@ -1,0 +1,29 @@
+{
+  "name": "qamar",
+  "version": "0.0.3",
+  "description": "free speech syntheseizer",
+  "main": "gulpfile.js",
+  "dependencies": {
+    "BankersBox": "git://github.com/twilio/BankersBox",
+    "async": "^0.9.0",
+    "gulp": "^3.8.10",
+    "gulp-clientjade": "^0.0.2",
+    "gulp-concat": "^2.4.3",
+    "gulp-sync": "^0.1.4",
+    "gulp-uglify": "^1.1.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/islamic-state/qamar"
+  },
+  "author": "dawlah",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/islamic-state/qamar/issues"
+  },
+  "homepage": "https://github.com/islamic-state/qamar"
+}
