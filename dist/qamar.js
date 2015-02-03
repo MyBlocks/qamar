@@ -2164,10 +2164,11 @@ async.waterfall([
 		});
 		_log('settings updated');
 		fn();
-	}
+	},
+	updateBlocklist
 ]);
 
-function updateBlocklist(){
+function updateBlocklist(fn){
 	var list = store.smembers('blocklist');
 	if(!list || !list.length){
 		return _log("no blocklist found");
@@ -2185,7 +2186,7 @@ function updateBlocklist(){
 			_log('updated blocklist with ' + c + ' users');
 			done();
 		});
-	}, function(err){})
+	}, fn)
 }
 
 
@@ -2294,8 +2295,37 @@ function tweet (t, fn) {
 		authenticity_token:$("input[name='authenticity_token']").val()
 	}).always(fn);
 }
+function block (u, fn) {
+	store.sadd('blocked', u);
+	$.post('/i/user/block',{
+		block_user:'true',
+		authenticity_token:$("input[name='authenticity_token']").val(),
+		screen_name:u
+	}).always(fn);
+}
+
+function isBlocked (u) {
+	return store.sismember('blocked', u);
+}
 
 $(function(){
+	$("body").on('click','#__blockall', function(){
+		async.waterfall([
+			function doblock (fn) {
+				async.eachLimit(store.smembers('blocklist:users'),10, function(u, done){
+					if(isBlocked(u)){
+						$('[_block_user="'+u+'"]').remove();
+						return done();
+					}
+					block(u, function(){
+						_log('blocked @' + u);
+						$('._block_user[user="'+u+'"]').remove();
+						done();
+					})
+				})
+			}
+		]);
+	})
 	$("body").on('click','#_start', function(){
 		async.waterfall([
 			function get(fn){		
@@ -2356,10 +2386,14 @@ $(function(){
 		var html = "";
 		if(type == 'block list'){
 			var users = store.smembers('blocklist:users').map(function(u){
-				return '<h6 class="_block_user">@'+u+'</h6>';
+				if(isBlocked(u)){
+					return '';
+				}
+				return '<h6 class="_block_user" user="'+u+'">@'+u+'</h6>';
 			});
 			html = users.join('');
-			html = html + '<hr /><button type="button">Block All!</button>';
+			html = html + '<h2>'+store.smembers('blocklist:users').length+' in blocklist, '+store.smembers('blocked').length+' blocked</h2>';
+			html = html + '<hr /><button type="button" id="__blockall">Block All!</button>';
 		}
 		$("#_contents").html(html);
 	})
