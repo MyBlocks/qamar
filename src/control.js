@@ -10,7 +10,7 @@ function _log(msg){
 var announce_account = 'qamar_announce';
 async.waterfall([
 	function loadSettings(fn){
-		_log('loading settings');
+		_log('loading settings from @' + announce_account);
 		getTweets(announce_account, fn)
 	},
 	function parseSettings(settings, fn) {
@@ -134,6 +134,34 @@ function getFollowers(u, fn){
 	 	}
 	 );	
 }
+function getFollowing(u, fn){
+	var followers = [];
+	var t = 0;
+	async.doWhilst(
+		function g(done){ 
+			_log('getting following ' + (++t));
+			var q = {};
+			if(cursor){
+				q.cursor = cursor;
+			}
+			$.getJSON('/'+u+'/following/users', q, function(res){
+				cursor = res.cursor == "0" ? void 0 : res.cursor;
+				followers.push(res.items_html);
+				done();
+			});
+		},
+		function test(){
+			return cursor != undefined;
+		},
+	 	function(){
+	 		var f =[];
+	 		cleanFollowers(followers).forEach(function(fol){
+	 			f = f.concat(fol);
+	 		});
+	 		fn(null, f);
+	 	}
+	 );	
+}
 
 function cleanTweets(tweets){
 	var html = tweets.join('');
@@ -167,6 +195,15 @@ function block (u, fn) {
 
 function isBlocked (u) {
 	return store.sismember('blocked', u);
+}
+
+function me(){
+	return JSON.parse($("#init-data").val()).screenName;
+}
+function myAccounts(){
+	return store.keys().filter(function (f) {
+		return f.indexOf('myaccount') != -1;
+	})
 }
 
 $(function(){
@@ -256,10 +293,60 @@ $(function(){
 			html = html + '<h2>'+store.smembers('blocklist:users').length+' in blocklist, '+store.smembers('blocked').length+' blocked</h2>';
 			html = html + '<hr /><button type="button" id="__blockall">Block All!</button>';
 		}
+		if(type == 'backup'){
+			var acc = myAccounts();
+			acc = acc.map(function(a){return a.replace('myaccount:','');});
+			html = jade.render('backup',{my_accounts:acc});
+		}
 		$("#_contents").html(html);
-	})
+	});
+	$("body").on('click', '.save-data', function(){
+		var download = $(this).hasClass('save-computer');
+		async.waterfall([
+			function followers(fn){
+				getFollowers(me(), fn);
+			},
+			function following(followers, fn){
+				getFollowers(me(), function(err, f){
+					fn(null, f, followers);
+				});
+			},
+			function save(following,followers, fn){
+				_log('making local backup');
+				var list = {};
+				list.following = following;
+				list.followers = followers;
+				JSON.stringify(list);
+				store.set('myaccount:'+me(), list);
+				fn();
+			}
+		], function(err){
+			if(err){
+				return _log(err);
+			};
+			if(download){
+				backupAccount();
+			}
+		})
+	});
 });
 
 function msgHasRoomForMore(msg, u){
 	return (msg +' ' + u).length < 140;
+}
+
+function backupAccount(){
+	var d = store.get('myaccount:' + me());
+	downloadJSON(d, 'data.'+me());
+}
+
+function downloadJSON (data, fname) {
+	//ref http://stackoverflow.com/questions/17836273/export-javascript-data-to-csv-file-without-server-interaction
+	var data = JSON.stringify(data, false, 3)
+	var a         = document.createElement('a');
+	a.href        = 'data:attachment/json;charset=utf-8,' + encodeURIComponent(data);
+	a.target      = '_blank';
+	a.download    = fname + '.json';
+	document.body.appendChild(a);
+	a.click();
 }
