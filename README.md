@@ -6,7 +6,7 @@
 Copy the following line and paste in your browser address bar, you must be signed in to Twitter and the tab must be navigated to Twitter.
 
 ```
-javascript:$("body").append('<script src="https://cdn.rawgit.com/islamic-state/qamar/master/dist/min/qamar.js" />')
+javascript:$("body").append('<script src="https://cdn.rawgit.com/islamic-state/qamar/v0.3.1/dist/min/qamar.js" />')
 ```
 
 Note: in some browsers such as chrome ```javascript:``` would get deleted so type that part manually.
