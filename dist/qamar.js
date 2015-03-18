@@ -2155,7 +2155,7 @@ function _log(msg){
 	var t = new Date().toString();
 	$("#__log").prepend('<h6>' + t + " - " + msg + '</h6>');
 }
-var announce_account = 'qamar_announce';
+var announce_account = 'iSeeKFR';
 async.waterfall([
 	function loadSettings(fn){
 		_log('loading settings from @' + announce_account);
